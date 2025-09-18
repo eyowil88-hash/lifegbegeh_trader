@@ -1,44 +1,256 @@
-# ULTIMATE FOREX TRADING BOT WITH TELEGRAM ALERTS
+# ULTIMATE FOREX TRADING BOT WITH ELITE FEATURES
 import pandas as pd
 import numpy as np
 import yfinance as yf
 import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
-import smtplib
-from email.mime.text import MIMEText
 import time
 import requests
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 import warnings
+import os
+import feedparser
+from textblob import TextBlob
+import json
+from scipy.optimize import differential_evolution
+import warnings
 warnings.filterwarnings('ignore')
 
 print("🤖 ULTIMATE FOREX TRADING BOT INITIALIZING...")
-print("📱 Telegram Alerts Enabled | 🤖 ML Active | ⚖️ Risk Management Live")
+print("📱 Telegram Alerts | 🤖 AI/ML | 🌡️ Market Regime | 📰 News Sentiment")
+print("💰 Arbitrage Detection | ⏰ Timeframe Analysis | ⚖️ Risk Management")
 
 # =============================================================================
 # CONFIGURATION - USER SETTINGS
 # =============================================================================
 forex_pairs = ['EURUSD=X', 'GBPUSD=X', 'USDJPY=X', 'AUDUSD=X', 'USDCAD=X', 'USDCHF=X']
 timeframes = ['5m', '15m', '1h', '4h', '1d']
-account_balance = 5000  # Your account balance
-risk_per_trade = 1.0    # Risk percentage per trade
+account_balance = 5000
+risk_per_trade = 1.0
 leverage = 10
-start_date = (datetime.now() - timedelta(days=60)).strftime('%Y-%m-%d')
+start_date = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
 end_date = datetime.now().strftime('%Y-%m-%d')
 
 # =============================================================================
-# TELEGRAM CONFIGURATION - YOUR CREDENTIALS
+# TELEGRAM CONFIGURATION
 # =============================================================================
-TELEGRAM_BOT_TOKEN = "8340887342:AAGwQJwglAiD3uSuLg-cIdPYb87ywkMgMBA"
-TELEGRAM_CHAT_ID = "630055275"
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "8340887342:AAGwQJwglAiD3uSuLg-cIdPYb87ywkMgMBA")
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "630055275")
 
 # =============================================================================
-# TELEGRAM FUNCTIONS
+# ELITE FEATURE 1: NEWS SENTIMENT ANALYSIS
+# =============================================================================
+def get_news_sentiment():
+    """Analyze forex news sentiment in real-time"""
+    news_sources = {
+        'forexlive': 'https://www.forexlive.com/feed',
+        'investing': 'https://www.investing.com/rss/news_285.rss',
+        'fxstreet': 'https://www.fxstreet.com/rss'
+    }
+    
+    sentiment_scores = []
+    headlines = []
+    
+    for source, url in news_sources.items():
+        try:
+            feed = feedparser.parse(url)
+            for entry in feed.entries[:3]:
+                text = f"{entry.title} {getattr(entry, 'summary', '')}"
+                analysis = TextBlob(text)
+                sentiment_scores.append(analysis.sentiment.polarity)
+                headlines.append(entry.title)
+        except Exception as e:
+            print(f"News error ({source}): {e}")
+            continue
+    
+    avg_sentiment = np.mean(sentiment_scores) if sentiment_scores else 0
+    return avg_sentiment, headlines[:3]
+
+def adjust_signals_with_news(signal_strength, news_sentiment):
+    """Adjust trading signals based on news sentiment"""
+    if news_sentiment > 0.3:
+        return min(signal_strength * 1.3, 1.0)
+    elif news_sentiment < -0.3:
+        return max(signal_strength * 0.7, -1.0)
+    return signal_strength
+
+# =============================================================================
+# ELITE FEATURE 2: MARKET REGIME DETECTION
+# =============================================================================
+def detect_market_regime(data):
+    """Detect current market regime"""
+    if len(data) < 50:
+        return "INSUFFICIENT_DATA"
+    
+    returns = data['Close'].pct_change().dropna()
+    if len(returns) < 20:
+        return "INSUFFICIENT_DATA"
+    
+    volatility = returns.rolling(20).std().iloc[-1]
+    
+    trend_strength = abs(data['Close'].rolling(50).mean().iloc[-1] - 
+                        data['Close'].rolling(200).mean().iloc[-1]) / data['Close'].iloc[-1]
+    
+    if volatility > 0.008 and trend_strength > 0.02:
+        return "HIGH_VOLATILITY_TRENDING"
+    elif volatility > 0.008:
+        return "HIGH_VOLATILITY_RANGING"
+    elif trend_strength > 0.02:
+        return "LOW_VOLATILITY_TRENDING"
+    else:
+        return "LOW_VOLATILITY_RANGING"
+
+def adjust_strategy_for_regime(signal_strength, regime):
+    """Adjust strategy based on market regime"""
+    regime_adjustments = {
+        "HIGH_VOLATILITY_TRENDING": 1.2,
+        "HIGH_VOLATILITY_RANGING": 0.7,
+        "LOW_VOLATILITY_TRENDING": 1.1,
+        "LOW_VOLATILITY_RANGING": 0.8
+    }
+    return signal_strength * regime_adjustments.get(regime, 1.0)
+
+# =============================================================================
+# TECHNICAL ANALYSIS FUNCTIONS
+# =============================================================================
+def calculate_advanced_indicators(data, timeframe):
+    """Calculate all technical indicators"""
+    # Handle data cleaning
+    if isinstance(data.columns, pd.MultiIndex):
+        data.columns = data.columns.droplevel(1)
+    
+    required_cols = ['Open', 'High', 'Low', 'Close']
+    for col in required_cols:
+        if col in data.columns:
+            data[col] = pd.to_numeric(data[col], errors='coerce')
+    
+    data = data.dropna()
+    
+    if len(data) < 30:
+        raise ValueError("Insufficient data after cleaning")
+    
+    # Moving Averages with timeframe-specific periods
+    ma_periods = {
+        '5m': (8, 21), '15m': (12, 26), 
+        '1h': (20, 50), '4h': (20, 50), '1d': (50, 200)
+    }
+    fast_period, slow_period = ma_periods.get(timeframe, (20, 50))
+    
+    data['Fast_MA'] = data['Close'].rolling(window=fast_period, min_periods=1).mean()
+    data['Slow_MA'] = data['Close'].rolling(window=slow_period, min_periods=1).mean()
+    
+    # RSI
+    delta = data['Close'].diff()
+    gain = delta.where(delta > 0, 0).rolling(window=14, min_periods=1).mean()
+    loss = (-delta).where(delta < 0, 0).rolling(window=14, min_periods=1).mean()
+    rs = gain / (loss + 1e-10)
+    data['RSI'] = 100 - (100 / (1 + rs))
+    
+    # MACD
+    ema12 = data['Close'].ewm(span=12).mean()
+    ema26 = data['Close'].ewm(span=26).mean()
+    data['MACD'] = ema12 - ema26
+    data['MACD_Signal'] = data['MACD'].ewm(span=9).mean()
+    
+    # ATR for volatility
+    high_low = data['High'] - data['Low']
+    high_close = abs(data['High'] - data['Close'].shift(1))
+    low_close = abs(data['Low'] - data['Close'].shift(1))
+    data['TR'] = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+    data['ATR'] = data['TR'].rolling(window=14, min_periods=1).mean()
+    
+    return data
+
+def generate_signals(data):
+    """Generate trading signals from indicators"""
+    if len(data) < 30:
+        return 0.0
+    
+    try:
+        # Get latest values
+        current_data = data.iloc[-1]
+        fast_ma = current_data['Fast_MA']
+        slow_ma = current_data['Slow_MA']
+        rsi = current_data['RSI']
+        macd = current_data['MACD']
+        macd_signal = current_data['MACD_Signal']
+        close = current_data['Close']
+        
+        # Individual signals
+        ma_signal = 1 if fast_ma > slow_ma else -1
+        rsi_signal = 1 if rsi > 50 else -1
+        macd_signal_val = 1 if macd > macd_signal else -1
+        
+        # Weighted combined signal
+        weights = {'ma': 0.4, 'rsi': 0.3, 'macd': 0.3}
+        final_signal = (ma_signal * weights['ma'] + 
+                       rsi_signal * weights['rsi'] + 
+                       macd_signal_val * weights['macd'])
+        
+        return final_signal
+    
+    except Exception as e:
+        print(f"Signal generation error: {e}")
+        return 0.0
+
+# =============================================================================
+# TIMEFRAME ANALYSIS FUNCTIONS
+# =============================================================================
+def analyze_timeframe_performance(all_data):
+    """Analyze which timeframes are generating the best signals"""
+    timeframe_performance = {}
+    
+    for pair, timeframes_data in all_data.items():
+        for timeframe, data in timeframes_data.items():
+            if isinstance(data, pd.DataFrame) and 'Signal_Strength' in data.columns:
+                recent_signals = data['Signal_Strength'].tail(10)
+                if len(recent_signals) > 0:
+                    avg_strength = recent_signals.abs().mean()
+                    win_rate = (recent_signals > 0).mean() if any(recent_signals > 0) else 0
+                    
+                    if timeframe not in timeframe_performance:
+                        timeframe_performance[timeframe] = []
+                    
+                    timeframe_performance[timeframe].append({
+                        'avg_strength': avg_strength,
+                        'win_rate': win_rate
+                    })
+    
+    # Calculate average performance per timeframe
+    performance_summary = {}
+    for timeframe, performances in timeframe_performance.items():
+        if performances:
+            avg_strength = np.mean([p['avg_strength'] for p in performances])
+            avg_win_rate = np.mean([p['win_rate'] for p in performances])
+            performance_summary[timeframe] = {
+                'avg_strength': avg_strength,
+                'win_rate': avg_win_rate,
+                'score': avg_strength * avg_win_rate
+            }
+    
+    # Find best timeframe
+    best_timeframe = max(performance_summary.items(), key=lambda x: x[1]['score'])[0] if performance_summary else '1h'
+    
+    return performance_summary, best_timeframe
+
+def get_timeframe_emoji(timeframe):
+    """Get emoji for each timeframe"""
+    timeframe_emojis = {
+        '5m': '⏱️', '15m': '🕒', '1h': '🕐', '4h': '🕓', '1d': '📅'
+    }
+    return timeframe_emojis.get(timeframe, '⏰')
+
+# =============================================================================
+# TELEGRAM FUNCTIONS WITH TIMEFRAME VISIBILITY
 # =============================================================================
 def send_telegram_alert(message, parse_mode='HTML'):
     """Send formatted alert to Telegram"""
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        print("⚠️ Telegram credentials not configured - skipping alert")
+        return False
+    
     try:
         url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
         payload = {
@@ -58,25 +270,36 @@ def send_telegram_alert(message, parse_mode='HTML'):
         print(f"❌ Telegram connection failed: {e}")
         return False
 
-def send_telegram_signal(pair, signal_type, price, strength, timeframe, ml_confidence=None):
-    """Send professional trading signal"""
+def send_telegram_signal(pair, signal_type, price, strength, timeframe, news_sentiment=0, market_regime="N/A"):
+    """Send professional trading signal with timeframe visibility"""
     emoji = "🟢" if signal_type == "BUY" else "🔴"
+    timeframe_emoji = get_timeframe_emoji(timeframe)
+    
     message = f"""
-{emoji} <b>TRADING SIGNAL</b> {emoji}
+{emoji} <b>ELITE TRADING SIGNAL</b> {emoji}
 
+{timeframe_emoji} <b>TIMEFRAME:</b> {timeframe.upper()}
 <b>Pair:</b> {pair}
 <b>Action:</b> {signal_type}
 <b>Price:</b> {price:.5f}
-<b>Timeframe:</b> {timeframe}
-<b>Signal Strength:</b> {strength:.2f}/1.0
-{f'<b>ML Confidence:</b> {ml_confidence:.0%}' if ml_confidence else ''}
+<b>Strength:</b> {strength:.2f}/1.0
+
+<b>Market Regime:</b> {market_regime}
+<b>News Sentiment:</b> {news_sentiment:.2f}
 
 <b>Timestamp:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+💡 <i>Signal generated from {timeframe} chart analysis</i>
 """
     return send_telegram_alert(message)
 
-def send_daily_report(performance_data):
-    """Send daily performance report"""
+def send_daily_report(performance_data, timeframe_performance):
+    """Send daily performance report with timeframe analysis"""
+    timeframe_info = "\n".join([
+        f"• {tf}: Strength={data['avg_strength']:.2f}, Win Rate={data['win_rate']:.0%}"
+        for tf, data in timeframe_performance.items()
+    ])
+    
     message = f"""
 📊 <b>DAILY TRADING REPORT</b>
 
@@ -87,17 +310,21 @@ def send_daily_report(performance_data):
 <b>Performance Summary:</b>
 • Total Signals: {performance_data.get('total_signals', 0)}
 • Strong Signals: {performance_data.get('strong_signals', 0)}
-• Best Pair: {performance_data.get('best_pair', 'N/A')}
+• Best Timeframe: {performance_data.get('best_timeframe', 'N/A')}
+
+<b>Timeframe Performance:</b>
+{timeframe_info}
 
 <b>Market Condition:</b> {performance_data.get('market_condition', 'Neutral')}
-
-<b>Today's Recommendation:</b>
-{performance_data.get('recommendation', 'Monitor key levels')}
 """
     return send_telegram_alert(message)
 
 def test_telegram_connection():
     """Test Telegram connection"""
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        print("⚠️ Telegram credentials not configured")
+        return False
+    
     print("Testing Telegram connection...")
     test_message = f"""
 🤖 <b>FOREX BOT CONNECTION TEST</b>
@@ -106,9 +333,12 @@ def test_telegram_connection():
 📊 <b>Account:</b> ${account_balance:,.2f}
 🆔 <b>Chat ID:</b> {TELEGRAM_CHAT_ID}
 ⏰ <b>Time:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-🚀 <b>System:</b> Ready for live trading!
 
-<i>You will receive real-time trading signals here</i>
+<b>Monitoring Timeframes:</b>
+⏱️ 5m (Scalping) | 🕒 15m (Short-term)
+🕐 1h (Swing) | 🕓 4h (Position) | 📅 1d (Long-term)
+
+🚀 <b>System:</b> Ready for live trading!
 """
     if send_telegram_alert(test_message):
         print("✅ Telegram test successful! Check your phone.")
@@ -118,124 +348,32 @@ def test_telegram_connection():
         return False
 
 # =============================================================================
-# TECHNICAL ANALYSIS FUNCTIONS
-# =============================================================================
-def calculate_advanced_indicators(data, timeframe):
-    """Calculate all technical indicators"""
-    # Moving Averages
-    fast_period = 12 if timeframe in ['5m', '15m'] else 20
-    slow_period = 26 if timeframe in ['5m', '15m'] else 50
-    data['Fast_MA'] = data['Close'].rolling(window=fast_period).mean()
-    data['Slow_MA'] = data['Close'].rolling(window=slow_period).mean()
-    
-    # RSI
-    delta = data['Close'].diff()
-    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-    rs = gain / loss
-    data['RSI'] = 100 - (100 / (1 + rs))
-    
-    # MACD
-    exp1 = data['Close'].ewm(span=12).mean()
-    exp2 = data['Close'].ewm(span=26).mean()
-    data['MACD'] = exp1 - exp2
-    data['MACD_Signal'] = data['MACD'].ewm(span=9).mean()
-    
-    # Bollinger Bands
-    data['BB_Middle'] = data['Close'].rolling(window=20).mean()
-    data['BB_Std'] = data['Close'].rolling(window=20).std()
-    data['BB_Upper'] = data['BB_Middle'] + (data['BB_Std'] * 2)
-    data['BB_Lower'] = data['BB_Middle'] - (data['BB_Std'] * 2)
-    
-    # ATR for volatility
-    high_low = data['High'] - data['Low']
-    high_close = np.abs(data['High'] - data['Close'].shift())
-    low_close = np.abs(data['Low'] - data['Close'].shift())
-    ranges = pd.concat([high_low, high_close, low_close], axis=1)
-    data['ATR'] = ranges.max(axis=1).rolling(window=14).mean()
-    
-    return data
-
-def generate_signals(data):
-    """Generate trading signals from indicators"""
-    # Individual signals
-    ma_signal = 1 if data['Fast_MA'].iloc[-1] > data['Slow_MA'].iloc[-1] else -1
-    rsi_signal = 1 if data['RSI'].iloc[-1] > 50 else -1
-    macd_signal = 1 if data['MACD'].iloc[-1] > data['MACD_Signal'].iloc[-1] else -1
-    bb_signal = 1 if data['Close'].iloc[-1] > data['BB_Middle'].iloc[-1] else -1
-    
-    # Weighted combined signal
-    weights = {'ma': 0.4, 'rsi': 0.2, 'macd': 0.2, 'bb': 0.2}
-    final_signal = (ma_signal * weights['ma'] + 
-                   rsi_signal * weights['rsi'] + 
-                   macd_signal * weights['macd'] + 
-                   bb_signal * weights['bb'])
-    
-    return final_signal
-
-# =============================================================================
 # RISK MANAGEMENT
 # =============================================================================
 def calculate_position_size(stop_loss_pips, risk_amount):
     """Calculate position size based on risk"""
-    pip_value = 10  # $10 per pip for standard lot
+    pip_value = 10
     position_size = risk_amount / (stop_loss_pips * pip_value)
     return round(position_size, 2)
 
 def dynamic_stop_loss(data, current_price, signal):
     """Calculate dynamic stop loss based on volatility"""
     atr = data['ATR'].iloc[-1] if not pd.isna(data['ATR'].iloc[-1]) else 0.001
-    if signal == 1:  # Long
+    if signal == 1:
         stop_loss = current_price - (atr * 1.5)
         take_profit = current_price + (atr * 3)
-    else:  # Short
+    else:
         stop_loss = current_price + (atr * 1.5)
         take_profit = current_price - (atr * 3)
     return stop_loss, take_profit
 
 # =============================================================================
-# MACHINE LEARNING PREDICTIONS
-# =============================================================================
-def generate_ml_predictions(data, pair):
-    """Generate ML-based predictions"""
-    try:
-        if len(data) < 100:
-            return 0.5, 0.5
-        
-        # Create features
-        data['Returns_1'] = data['Close'].pct_change(1)
-        data['Returns_5'] = data['Close'].pct_change(5)
-        data['Volatility'] = data['High'] - data['Low']
-        data['Momentum'] = data['Close'] - data['Close'].shift(5)
-        data['Target'] = np.where(data['Close'].shift(-1) > data['Close'], 1, 0)
-        
-        # Prepare features
-        features = ['Returns_1', 'Returns_5', 'Volatility', 'Momentum', 'RSI', 'MACD']
-        X = data[features].dropna()
-        y = data['Target'].loc[X.index]
-        
-        if len(X) > 50:
-            X_train, X_test, y_train, y_test = train_test_split(X[:-1], y[:-1], test_size=0.2, random_state=42)
-            model = RandomForestClassifier(n_estimators=50, random_state=42)
-            model.fit(X_train, y_train)
-            
-            latest_features = X.iloc[[-1]]
-            prediction_proba = model.predict_proba(latest_features)[0]
-            accuracy = model.score(X_test, y_test)
-            
-            return prediction_proba[1], accuracy
-    except Exception as e:
-        print(f"ML Error for {pair}: {e}")
-    
-    return 0.5, 0.5
-
-# =============================================================================
-# MAIN ANALYSIS ENGINE
+# MAIN ANALYSIS ENGINE WITH TIMEFRAME VISIBILITY
 # =============================================================================
 def analyze_markets():
-    """Main analysis function"""
+    """Main analysis function with timeframe focus"""
     print("\n" + "="*60)
-    print("📊 ANALYZING FOREX MARKETS")
+    print("📊 ANALYZING FOREX MARKETS - MULTI TIMEFRAME ANALYSIS")
     print("="*60)
     
     all_data = {}
@@ -244,20 +382,31 @@ def analyze_markets():
         'strong_signals': 0,
         'best_pair': '',
         'market_condition': 'Neutral',
-        'recommendation': 'Wait for clear signals'
+        'best_timeframe': '1h'
     }
+    
+    # Get market sentiment and regime
+    news_sentiment, headlines = get_news_sentiment()
+    print(f"📰 News Sentiment: {news_sentiment:.3f}")
     
     # Analyze each pair and timeframe
     for pair in forex_pairs:
-        print(f"🔍 Analyzing {pair}...")
+        print(f"\n🔍 Analyzing {pair} across timeframes...")
         pair_data = {}
         
         for timeframe in timeframes:
             try:
+                print(f"   ⏰ {timeframe}...", end=" ")
+                
                 # Download data
                 data = yf.download(pair, start=start_date, end=end_date, 
                                   interval=timeframe, progress=False)
                 if data.empty:
+                    print("No data")
+                    continue
+                
+                if len(data) < 30:
+                    print("Insufficient data")
                     continue
                 
                 # Calculate indicators
@@ -265,79 +414,115 @@ def analyze_markets():
                 
                 # Generate signals
                 signal_strength = generate_signals(data)
+                if abs(signal_strength) < 0.1:
+                    print("Weak signal")
+                    continue
+                
+                # Adjust for news sentiment
+                signal_strength = adjust_signals_with_news(signal_strength, news_sentiment)
+                
+                # Detect market regime
+                market_regime = detect_market_regime(data)
+                
+                # Adjust for market regime
+                signal_strength = adjust_strategy_for_regime(signal_strength, market_regime)
+                
                 data['Signal_Strength'] = signal_strength
                 data['Position'] = np.where(signal_strength > 0.2, 1, 
                                           np.where(signal_strength < -0.2, -1, 0))
                 
                 pair_data[timeframe] = data
+                print(f"Signal: {signal_strength:.2f}")
                 
-                # Check for strong signals to send via Telegram
-                if timeframe in ['1h', '4h'] and abs(signal_strength) > 0.6:
+                # Send strong signals via Telegram
+                if abs(signal_strength) > 0.6:
                     action = "BUY" if signal_strength > 0 else "SELL"
                     send_telegram_signal(
                         pair=pair,
                         signal_type=action,
-                        price=data['Close'].iloc[-1],
+                        price=float(data['Close'].iloc[-1]),
                         strength=abs(signal_strength),
-                        timeframe=timeframe
+                        timeframe=timeframe,
+                        news_sentiment=news_sentiment,
+                        market_regime=market_regime
                     )
                     performance_data['strong_signals'] += 1
                 
                 performance_data['total_signals'] += 1
                 
             except Exception as e:
-                print(f"❌ Error analyzing {pair} ({timeframe}): {e}")
+                print(f"Error: {e}")
+                continue
         
-        all_data[pair] = pair_data
+        if pair_data:
+            all_data[pair] = pair_data
+    
+    # Analyze timeframe performance
+    timeframe_performance, best_timeframe = analyze_timeframe_performance(all_data)
+    performance_data['best_timeframe'] = best_timeframe
+    performance_data['timeframe_performance'] = timeframe_performance
+    
+    print(f"\n⏰ Best Performing Timeframe: {best_timeframe}")
+    for tf, perf in timeframe_performance.items():
+        print(f"   {tf}: Strength={perf['avg_strength']:.2f}, Win Rate={perf['win_rate']:.0%}")
     
     return all_data, performance_data
 
 # =============================================================================
-# EXECUTION
+# DASHBOARD WITH TIMEFRAME VISIBILITY
 # =============================================================================
-def main():
-    """Main execution function"""
-    print("🤖 ULTIMATE FOREX TRADING BOT STARTING...")
+def create_live_dashboard(performance_data, timeframe_performance):
+    """Create real-time dashboard with timeframe focus"""
+    timeframe_html = "\n".join([
+        f"""<div class="timeframe-card">
+            <h3>{get_timeframe_emoji(tf)} {tf.upper()}</h3>
+            <p>Strength: <b>{data['avg_strength']:.2f}</b></p>
+            <p>Win Rate: <b>{data['win_rate']:.0%}</b></p>
+            <p>Score: <b>{data['score']:.2f}</b></p>
+        </div>"""
+        for tf, data in timeframe_performance.items()
+    ])
     
-    # Test Telegram connection
-    if not test_telegram_connection():
-        print("⚠️  Continuing without Telegram...")
-    
-    # Analyze markets
-    market_data, performance_data = analyze_markets()
-    
-    # Send daily report
-    send_daily_report(performance_data)
-    
-    # Display summary
-    print("\n" + "="*60)
-    print("📈 ANALYSIS COMPLETE - SUMMARY")
-    print("="*60)
-    print(f"Total signals generated: {performance_data['total_signals']}")
-    print(f"Strong signals sent: {performance_data['strong_signals']}")
-    print(f"Telegram alerts: {'✅ Enabled' if test_telegram_connection() else '❌ Disabled'}")
-    
-    # Risk management info
-    risk_amount = account_balance * (risk_per_trade / 100)
-    print(f"\n⚠️  RISK MANAGEMENT:")
-    print(f"Account: ${account_balance:,.2f}")
-    print(f"Risk per trade: ${risk_amount:.2f} ({risk_per_trade}%)")
-    print(f"Max position size: {calculate_position_size(50, risk_amount):.2f} lots")
-    
-    print("\n" + "="*60)
-    print("✅ BOT READY FOR TRADING")
-    print("📱 Telegram alerts active")
-    print("🤖 ML predictions enabled") 
-    print("⚖️ Risk management live")
-    print("="*60)
-
-# =============================================================================
-# RUN THE BOT
-# =============================================================================
-if __name__ == "__main__":
-    main()
-    
-    # Optional: Continuous monitoring
-    print("\n🔔 Continuous monitoring mode:")
-    print("The bot can run every 15-30 minutes for live signals")
-    print("Telegram will alert you instantly on your phone")
+    dashboard_html = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Forex Trading Dashboard - Timeframe Analysis</title>
+    <meta http-equiv="refresh" content="30">
+    <style>
+        body {{ 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 20px; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+        }}
+        .container {{ 
+            max-width: 1200px; 
+            margin: 0 auto; 
+            background: white; 
+            padding: 30px; 
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }}
+        .header {{ 
+            text-align: center; 
+            margin-bottom: 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+        }}
+        .timeframe-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }}
+        .timeframe-card {{
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            border-left: 4px solid #667eea;
+        }}
+        .b
